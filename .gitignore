@@ -1,5 +1,6 @@
 /notes.txt
-
+/tree.bat
+/tree.txt
 
 #run amplify pull to get this instead of checking it in
 amplify/team-provider-info.json
