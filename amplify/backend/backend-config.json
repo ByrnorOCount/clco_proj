@@ -1,4 +1,28 @@
 {
+  "api": {
+    "ImageLabeler": {
+      "dependsOn": [
+        {
+          "attributes": [
+            "Name",
+            "Arn"
+          ],
+          "category": "function",
+          "resourceName": "ImageLabeler"
+        }
+      ],
+      "providerPlugin": "awscloudformation",
+      "service": "API Gateway"
+    }
+  },
+  "function": {
+    "ImageLabeler": {
+      "build": true,
+      "dependsOn": [],
+      "providerPlugin": "awscloudformation",
+      "service": "Lambda"
+    }
+  },
   "hosting": {
     "amplifyhosting": {
       "lastPushTimeStamp": "2025-10-15T13:37:33.494Z",
@@ -7,6 +31,22 @@
     }
   },
   "parameters": {
+    "AMPLIFY_function_ImageLabeler_deploymentBucketName": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "ImageLabeler"
+        }
+      ]
+    },
+    "AMPLIFY_function_ImageLabeler_s3Key": {
+      "usedBy": [
+        {
+          "category": "function",
+          "resourceName": "ImageLabeler"
+        }
+      ]
+    },
     "AMPLIFY_hosting_amplifyhosting_appId": {
       "usedBy": [
         {
