@@ -1,0 +1,4 @@
+body { font-family: sans-serif; text-align: center; margin-top: 40px; }
+input { width: 60%; padding: 8px; }
+button { padding: 8px 16px; margin-left: 8px; }
+#result img { margin-top: 20px; border-radius: 8px; }
