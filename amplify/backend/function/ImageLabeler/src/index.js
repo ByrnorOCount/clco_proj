@@ -1,23 +1,28 @@
-import { RekognitionClient, DetectLabelsCommand } from "@aws-sdk/client-rekognition";
-import https from "https";
+const https = require("https");
+const {
+  RekognitionClient,
+  DetectLabelsCommand,
+} = require("@aws-sdk/client-rekognition");
 
 const rekognition = new RekognitionClient({ region: "ap-southeast-2" });
 
 function fetchImageBytesFromUrl(url) {
   return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      const chunks = [];
-      res.on("data", (chunk) => chunks.push(chunk));
-      res.on("end", () => resolve(Buffer.concat(chunks)));
-      res.on("error", reject);
-    }).on("error", reject);
+    https
+      .get(url, (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("end", () => resolve(Buffer.concat(chunks)));
+        res.on("error", reject);
+      })
+      .on("error", reject);
   });
 }
 
-export const handler = async (event) => {
+exports.handler = async (event) => {
   try {
-    // Parse body (if stringified)
-    const body = typeof event.body === "string" ? JSON.parse(event.body) : event.body || {};
+    const body =
+      typeof event.body === "string" ? JSON.parse(event.body) : event.body || {};
     let imageBytes;
 
     if (body.imageBase64) {
@@ -34,7 +39,6 @@ export const handler = async (event) => {
       };
     }
 
-    // Call Rekognition using AWS SDK v3 style
     const command = new DetectLabelsCommand({
       Image: { Bytes: imageBytes },
       MaxLabels: 15,
@@ -43,7 +47,6 @@ export const handler = async (event) => {
 
     const rekogResponse = await rekognition.send(command);
 
-    // Normalize to array of { name, confidence }
     const labels = (rekogResponse.Labels || []).map((l) => ({
       name: l.Name,
       confidence: l.Confidence,
