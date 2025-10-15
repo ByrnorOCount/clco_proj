@@ -15,7 +15,7 @@
   <script>
   async function analyze() {
     const imageUrl = document.getElementById('urlInput').value;
-    const res = await fetch('YOUR_API_GATEWAY_URL/label', {
+    const res = await fetch('https://y98g2010ni.execute-api.ap-southeast-2.amazonaws.com/dev/label', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageUrl })
