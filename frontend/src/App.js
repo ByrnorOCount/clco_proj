@@ -4,9 +4,10 @@ import "./App.css";
 const API_ENDPOINT = "https://b1dph4kf0a.execute-api.ap-southeast-2.amazonaws.com/dev/label";
 
 function percentToColor(pct) {
-  // 0 -> red, 50 -> orange, 100 -> green
-  const hue = (pct * 1.2); // 0..120
-  return `hsl(${hue}, 75%, 45%)`;
+  // Maps a percentage to a color in the HSL color space.
+  // 0% is red (hue 0), 50% is yellow (hue 60), 100% is green (hue 120).
+  const hue = (pct / 100) * 120;
+  return `hsl(${hue}, 90%, 45%)`;
 }
 
 export default function App() {
@@ -34,23 +35,23 @@ export default function App() {
     setProgressPct(0);
   }
 
-  function uploadWithProgress(url, body, setProgress) {
+  function uploadWithProgress(url, body, { setProgress, progressStart, progressEnd }) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", url);
       xhr.setRequestHeader("Content-Type", "application/json");
 
-      // Track upload progress (0–60%)
+      // Track upload progress within the given range
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
-          const pct = (e.loaded / e.total) * 60; // 0–60%
+          const pct = progressStart + (e.loaded / e.total) * (progressEnd - progressStart);
           setProgress(pct);
         }
       };
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          setProgress(85);
+          setProgress(progressEnd);
           resolve(JSON.parse(xhr.responseText));
         } else {
           reject(new Error(`API error ${xhr.status}: ${xhr.statusText}`));
@@ -76,21 +77,28 @@ export default function App() {
     setLoading(true);
     setProgressPct(5);
 
+    // Utility to add a small delay
+    const wait = (ms) => new Promise(res => setTimeout(res, ms));
+
     try {
       let body;
+      let uploadStartPct = 5;
       if (file || preview) {
         setProgressPct(10);
         const b64 = preview || await toDataUrl(file);
         setProgressPct(20);
         body = { imageBase64: b64 };
+        uploadStartPct = 20;
       } else {
         body = { imageUrl: imageUrl };
       }
 
-      // Real upload progress
-      const json = await uploadWithProgress(API_ENDPOINT, JSON.stringify(body), setProgressPct);
+      // Upload contributes to progress from its start point up to 80%
+      const json = await uploadWithProgress(API_ENDPOINT, JSON.stringify(body), { setProgress: setProgressPct, progressStart: uploadStartPct, progressEnd: 80 });
 
       // Handle both { labels: [...] } and raw arrays
+      await wait(200); setProgressPct(85); // "Analyzing..."
+      await wait(200); setProgressPct(90); // "Finalizing..."
       const got = json.labels || json.Labels || json || [];
       const normalized = (Array.isArray(got) ? got : []).map((l) => {
         if (l.name) return l;
@@ -100,7 +108,7 @@ export default function App() {
         return { name: l.Name || l.name || keys[0], confidence: l.Confidence || l.confidence || 0 };
       });
 
-      setProgressPct(95);
+      await wait(100); setProgressPct(95);
       setLabels(normalized);
       setProgressPct(100);
     } catch (err) {
@@ -160,8 +168,8 @@ export default function App() {
           <div className="loading-text">
             {progressPct < 10 && "Initializing…"}
             {progressPct >= 10 && progressPct < 25 && "Preparing image…"}
-            {progressPct >= 25 && progressPct < 60 && "Uploading to API…"}
-            {progressPct >= 60 && progressPct < 85 && "Analyzing with AWS Rekognition…"}
+            {progressPct >= 25 && progressPct < 80 && "Uploading to API…"}
+            {progressPct >= 80 && progressPct < 90 && "Analyzing with AWS Rekognition…"}
             {progressPct >= 85 && progressPct < 100 && "Finalizing results…"}
             <span> ({Math.round(progressPct)}%)</span>
           </div>
