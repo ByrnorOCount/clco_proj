@@ -34,6 +34,36 @@ export default function App() {
     setProgressPct(0);
   }
 
+  function uploadWithProgress(url, body, setProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      xhr.setRequestHeader("Content-Type", "application/json");
+
+      // Track upload progress (0–60%)
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = (e.loaded / e.total) * 60; // 0–60%
+          setProgress(pct);
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          setProgress(85);
+          resolve(JSON.parse(xhr.responseText));
+        } else {
+          reject(new Error(`API error ${xhr.status}: ${xhr.statusText}`));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error("Network error"));
+      xhr.ontimeout = () => reject(new Error("Request timed out"));
+
+      xhr.send(body);
+    });
+  }
+
   async function handleAnalyze(e) {
     e && e.preventDefault();
     resetStateForNewRun();
@@ -44,48 +74,28 @@ export default function App() {
     }
 
     setLoading(true);
-    setProgressPct(10);
+    setProgressPct(5);
 
     try {
       let body;
       if (file || preview) {
-        // send base64 string
+        setProgressPct(10);
         const b64 = preview || await toDataUrl(file);
-        // b64 is like data:image/png;base64,AAA...
+        setProgressPct(20);
         body = { imageBase64: b64 };
       } else {
         body = { imageUrl: imageUrl };
       }
 
-      setProgressPct(30);
+      // Real upload progress
+      const json = await uploadWithProgress(API_ENDPOINT, JSON.stringify(body), setProgressPct);
 
-      // Simulate progress improvements
-      const controller = new AbortController();
-      const signal = controller.signal;
-
-      const resp = await fetch(API_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal,
-      });
-
-      setProgressPct(65);
-
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`API error: ${resp.status} ${text}`);
-      }
-
-      const json = await resp.json();
-      // handle both { labels: [...] } and raw arrays
+      // Handle both { labels: [...] } and raw arrays
       const got = json.labels || json.Labels || json || [];
-      // Normalize
       const normalized = (Array.isArray(got) ? got : []).map((l) => {
         if (l.name) return l;
         if (l.Name) return { name: l.Name, confidence: l.Confidence };
         if (l.label) return { name: l.label, confidence: l.confidence };
-        // unknown shape — try best guess
         const keys = Object.keys(l);
         return { name: l.Name || l.name || keys[0], confidence: l.Confidence || l.confidence || 0 };
       });
@@ -99,7 +109,7 @@ export default function App() {
     } finally {
       setTimeout(() => {
         setLoading(false);
-      }, 300);
+      }, 400);
     }
   }
 
@@ -145,7 +155,19 @@ export default function App() {
         <div className="progress-bar-outer" aria-hidden>
           <div className="progress-bar-inner" style={{ width: `${progressPct}%` }} />
         </div>
-        {loading ? <div className="loading-text">Analyzing… {progressPct}%</div> : <div className="idle-text">Ready</div>}
+
+        {loading ? (
+          <div className="loading-text">
+            {progressPct < 10 && "Initializing…"}
+            {progressPct >= 10 && progressPct < 25 && "Preparing image…"}
+            {progressPct >= 25 && progressPct < 60 && "Uploading to API…"}
+            {progressPct >= 60 && progressPct < 85 && "Analyzing with AWS Rekognition…"}
+            {progressPct >= 85 && progressPct < 100 && "Finalizing results…"}
+            <span> ({Math.round(progressPct)}%)</span>
+          </div>
+        ) : (
+          <div className="idle-text">Ready</div>
+        )}
       </div>
 
       {error && <div className="error">{error}</div>}

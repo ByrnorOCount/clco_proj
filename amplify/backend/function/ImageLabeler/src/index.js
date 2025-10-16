@@ -41,8 +41,8 @@ exports.handler = async (event) => {
 
     const command = new DetectLabelsCommand({
       Image: { Bytes: imageBytes },
-      MaxLabels: 50,
-      MinConfidence: 20,
+      MaxLabels: 100,
+      MinConfidence: 0,
     });
 
     const rekogResponse = await rekognition.send(command);

@@ -85,10 +85,10 @@ h1 { margin: 0 0 12px; font-size: 26px; text-align: center; }
 }
 
 .progress-bar-inner {
-  height: 100%;
-  width: 0%;
-  transition: width 350ms linear;
-  background: linear-gradient(90deg,#5b9bff,#2ec4b6);
+  height: 8px;
+  background: linear-gradient(90deg, #34d399, #3b82f6);
+  border-radius: 9999px;
+  transition: width 0.25s ease-in-out;
 }
 
 .loading-text { color: #0b66d1; font-weight: 600; margin-top: 8px; }
