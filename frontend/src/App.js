@@ -292,10 +292,12 @@ export default function App() {
                       borderColor: percentToColor(l.Confidence),
                     }}
                     onMouseEnter={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
+                      // Position tooltip slightly to the northeast of the cursor
+                      const left = e.clientX + 12 + window.scrollX; // a bit right of the cursor
+                      const top = e.clientY - 28 + window.scrollY;  // above the cursor
                       setTooltip({
-                        x: rect.left + window.scrollX,
-                        y: rect.top + window.scrollY,
+                        x: left,
+                        y: top,
                         label: l,
                       });
                     }}
