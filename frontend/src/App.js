@@ -15,9 +15,14 @@ export default function App() {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState("");
   const [labels, setLabels] = useState([]);
+  const [imageProps, setImageProps] = useState(null);
   const [loading, setLoading] = useState(false);
   const [progressPct, setProgressPct] = useState(0);
   const [error, setError] = useState("");
+  const [minConfidence, setMinConfidence] = useState(0);
+  const [maxLabels, setMaxLabels] = useState(100);
+  const [maxDominantColors, setMaxDominantColors] = useState(5);
+  const [expanded, setExpanded] = useState({ labels: false, props: false });
 
   async function handleFileChange(e) {
     const f = e.target.files[0];
@@ -31,6 +36,7 @@ export default function App() {
 
   function resetStateForNewRun() {
     setLabels([]);
+    setImageProps(null);
     setError("");
     setProgressPct(0);
   }
@@ -84,33 +90,39 @@ export default function App() {
       let body;
       let uploadStartPct = 5;
       if (file || preview) {
-        setProgressPct(10);
+        await wait(100); setProgressPct(10);
         const b64 = preview || await toDataUrl(file);
-        setProgressPct(20);
-        body = { imageBase64: b64 };
-        uploadStartPct = 20;
+        await wait(100); setProgressPct(20);
+        body = { 
+          imageBase64: b64, 
+          minConfidence, 
+          maxLabels, 
+          maxDominantColors
+        };
+        await wait(100); uploadStartPct = 20;
       } else {
-        body = { imageUrl: imageUrl };
+        body = { 
+          imageUrl: imageUrl, 
+          minConfidence, 
+          maxLabels, 
+          maxDominantColors
+        };
       }
 
       // Upload contributes to progress from its start point up to 80%
-      const json = await uploadWithProgress(API_ENDPOINT, JSON.stringify(body), { setProgress: setProgressPct, progressStart: uploadStartPct, progressEnd: 80 });
+      const json = await uploadWithProgress(
+        API_ENDPOINT, 
+        JSON.stringify(body), 
+        { setProgress: setProgressPct, progressStart: uploadStartPct, progressEnd: 80 }
+      ); // todo: increment progress smoothly
 
-      // Handle both { labels: [...] } and raw arrays
-      await wait(200); setProgressPct(85); // "Analyzing..."
-      await wait(200); setProgressPct(90); // "Finalizing..."
-      const got = json.labels || json.Labels || json || [];
-      const normalized = (Array.isArray(got) ? got : []).map((l) => {
-        if (l.name) return l;
-        if (l.Name) return { name: l.Name, confidence: l.Confidence };
-        if (l.label) return { name: l.label, confidence: l.confidence };
-        const keys = Object.keys(l);
-        return { name: l.Name || l.name || keys[0], confidence: l.Confidence || l.confidence || 0 };
-      });
+      await wait(200); setProgressPct(85); 
+      const gotLabels = json.Labels || [];
+      const gotProps = json.ImageProperties || null;
 
-      await wait(100); setProgressPct(95);
-      setLabels(normalized);
-      setProgressPct(100);
+      setLabels(Array.isArray(gotLabels) ? gotLabels : []);
+      setImageProps(gotProps);
+      await wait(200); setProgressPct(100);
     } catch (err) {
       console.error(err);
       setError(err.message || "Analysis failed");
@@ -132,7 +144,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <h1>🧪 Live Image Label Analyzer</h1>
+      <h1>🧪 Rekognition Image Analyzer</h1>
 
       <form onSubmit={handleAnalyze} className="controls">
         <div className="input-row">
@@ -140,28 +152,98 @@ export default function App() {
             className="url-input"
             placeholder="Enter image URL..."
             value={imageUrl}
-            onChange={(e) => { setImageUrl(e.target.value); setPreview(""); setFile(null); }}
+            onChange={(e) => {
+              setImageUrl(e.target.value);
+              setPreview("");
+              setFile(null);
+            }}
             disabled={loading}
           />
-          <button className="btn" type="submit" disabled={loading}>Analyze</button>
+          <button className="btn" type="submit" disabled={loading}>
+            Analyze
+          </button>
         </div>
 
         <div className="or-row">— or upload an image —</div>
 
         <div className="upload-row">
-          <input type="file" accept="image/*" onChange={handleFileChange} disabled={loading} />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            disabled={loading}
+          />
+        </div>
+
+        <div className="slider-row">
+          <label>Min Confidence: {minConfidence}%</label>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={minConfidence}
+            onChange={(e) => setMinConfidence(+e.target.value)}
+          />
+          <label>Max Labels: {maxLabels}</label>
+          <input
+            type="range"
+            min="1"
+            max="100"
+            step="1"
+            value={maxLabels}
+            onChange={(e) => setMaxLabels(+e.target.value)}
+          />
+          <label>Max Dominant Colors: {maxDominantColors}</label>
+          <input
+            type="range"
+            min="1"
+            max="10"
+            step="1"
+            value={maxDominantColors}
+            onChange={(e) => setMaxDominantColors(+e.target.value)}
+          />
         </div>
       </form>
 
       <div className="preview-wrap">
-        {preview ? <img src={preview} alt="preview" className="preview-img" /> : imageUrl ? <img src={imageUrl} alt="preview" className="preview-img" /> : (
+        {(preview || imageUrl) ? (
+          <div className="image-overlay-wrap">
+            <img
+              src={preview || imageUrl}
+              alt="preview"
+              className="preview-img"
+            />
+            {labels
+              .filter((l) => l.Instances && l.Instances.length)
+              .map((l, i) =>
+                l.Instances.map((inst, j) => (
+                  <div
+                    key={`${i}-${j}`}
+                    className="bbox"
+                    title={`${l.Name} (${l.Confidence.toFixed(1)}%)`}
+                    style={{
+                      left: `${inst.BoundingBox.Left * 100}%`,
+                      top: `${inst.BoundingBox.Top * 100}%`,
+                      width: `${inst.BoundingBox.Width * 100}%`,
+                      height: `${inst.BoundingBox.Height * 100}%`,
+                      borderColor: percentToColor(l.Confidence),
+                    }}
+                  />
+                ))
+              )}
+          </div>
+        ) : (
           <div className="preview-placeholder">Image preview</div>
         )}
       </div>
 
       <div className="status-row">
         <div className="progress-bar-outer" aria-hidden>
-          <div className="progress-bar-inner" style={{ width: `${progressPct}%` }} />
+          <div
+            className="progress-bar-inner"
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
 
         {loading ? (
@@ -180,17 +262,79 @@ export default function App() {
 
       {error && <div className="error">{error}</div>}
 
+      {/* Collapsible - Full Label Info */}
+      <div
+        className="collapsible"
+        onClick={() =>
+          setExpanded((p) => ({ ...p, labels: !p.labels }))
+        }
+      >
+        <div className="collapsible-header">
+          <span>Detected Labels (Full Info)</span>
+          <span className={`arrow ${expanded.labels ? "open" : ""}`}>▶</span>
+        </div>
+        {expanded.labels && (
+          <div className="collapsible-content">
+            {labels.map((l, i) => (
+              <div key={i} className="label-detail">
+                <b>{l.Name}</b> – {l.Confidence?.toFixed(2)}%
+                {l.Parents?.length > 0 && (
+                  <div>Parents: {l.Parents.map((p) => p.Name).join(", ")}</div>
+                )}
+                {l.Categories?.length > 0 && (
+                  <div>Categories: {l.Categories.map((c) => c.Name).join(", ")}</div>
+                )}
+                {l.Aliases?.length > 0 && (
+                  <div>Aliases: {l.Aliases.map((a) => a.Name).join(", ")}</div>
+                )}
+                {l.Instances?.length > 0 && (
+                  <div>Instances: {l.Instances.length} (with bounding boxes)</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Collapsible - Image Properties */}
+      <div
+        className="collapsible"
+        onClick={() =>
+          setExpanded((p) => ({ ...p, props: !p.props }))
+        }
+      >
+        <div className="collapsible-header">
+          <span>Image Properties</span>
+          <span className={`arrow ${expanded.props ? "open" : ""}`}>▶</span>
+        </div>
+        {expanded.props && imageProps && (
+          <pre className="json-view">
+            {JSON.stringify(imageProps, null, 2)}
+          </pre>
+        )}
+      </div>
+
+      {/* Simple Label Cards */}
       <div className="labels-grid">
-        {labels.length === 0 && !loading && <div className="hint">No labels yet — run an analysis.</div>}
+        {labels.length === 0 && !loading && (
+          <div className="hint">No labels yet — run an analysis.</div>
+        )}
         {labels.map((l, i) => {
-          const pct = Math.round((l.confidence || 0) * 100) / 100;
+          const pct = Math.round((l.Confidence || 0) * 100) / 100;
           const bg = percentToColor(pct);
           return (
-            <div className="label-card" key={i} style={{ borderTop: `6px solid ${bg}` }}>
-              <div className="label-name">{l.name}</div>
+            <div
+              className="label-card"
+              key={i}
+              style={{ borderTop: `6px solid ${bg}` }}
+            >
+              <div className="label-name">{l.Name}</div>
               <div className="label-confidence">{pct}%</div>
               <div className="confidence-bar-outer">
-                <div className="confidence-bar-inner" style={{ width: `${pct}%`, background: bg }} />
+                <div
+                  className="confidence-bar-inner"
+                  style={{ width: `${pct}%`, background: bg }}
+                />
               </div>
             </div>
           );

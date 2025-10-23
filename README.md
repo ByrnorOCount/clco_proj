@@ -1,4 +1,6 @@
-git clone https://github.com/ByrnorOCount/clco_proj.git
+# How to run
+
+git clone <https://github.com/ByrnorOCount/clco_proj.git>
 
 cd frontend
 

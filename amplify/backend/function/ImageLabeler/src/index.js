@@ -39,25 +39,40 @@ exports.handler = async (event) => {
       };
     }
 
-    const command = new DetectLabelsCommand({
+    // Use provided params or sensible defaults
+    const minConfidence = typeof body.minConfidence === "number" ? body.minConfidence : 55; // doc default
+    const maxLabels = typeof body.maxLabels === "number" ? body.maxLabels : 100;
+    const maxDominantColors =
+      typeof body.maxDominantColors === "number" ? body.maxDominantColors : 5;
+
+    // Build DetectLabels request with both GENERAL_LABELS and IMAGE_PROPERTIES when needed
+    const params = {
       Image: { Bytes: imageBytes },
-      MaxLabels: 100,
-      MinConfidence: 0,
-    });
+      // MinConfidence and MaxLabels only apply to GENERAL_LABELS,
+      // but sending them here is fine as the API applies them to label detection.
+      MinConfidence: minConfidence,
+      MaxLabels: maxLabels,
+      Features: ["GENERAL_LABELS", "IMAGE_PROPERTIES"],
+      Settings: {
+        ImageProperties: {
+          MaxDominantColors: maxDominantColors,
+        },
+      },
+    };
 
-    const rekogResponse = await rekognition.send(command);
+    const cmd = new DetectLabelsCommand(params);
+    const rekogResponse = await rekognition.send(cmd);
 
-    const labels = (rekogResponse.Labels || []).map((l) => ({
-      name: l.Name,
-      confidence: l.Confidence,
-    }));
-
-    console.log("Detected labels:", labels);
-
+    // rekogResponse contains: Labels (array), ImageProperties (object), LabelModelVersion, OrientationCorrection
     return {
       statusCode: 200,
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ labels }),
+      body: JSON.stringify({
+        Labels: rekogResponse.Labels || [],
+        ImageProperties: rekogResponse.ImageProperties || null,
+        LabelModelVersion: rekogResponse.LabelModelVersion || null,
+        OrientationCorrection: rekogResponse.OrientationCorrection || null,
+      }),
     };
   } catch (err) {
     console.error(err);
