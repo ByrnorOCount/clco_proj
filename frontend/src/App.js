@@ -187,15 +187,15 @@ export default function App() {
             <h3>Image Quality</h3>
             <div className="quality-grid">
               <div className="quality-item">
-                <span>Brightness</span>
+                <span>Brightness: </span>
                 <span>{props.Quality.Brightness.toFixed(1)}</span>
               </div>
               <div className="quality-item">
-                <span>Sharpness</span>
+                <span>Sharpness: </span>
                 <span>{props.Quality.Sharpness.toFixed(1)}</span>
               </div>
               <div className="quality-item">
-                <span>Contrast</span>
+                <span>Contrast: </span>
                 <span>{props.Quality.Contrast.toFixed(1)}</span>
               </div>
             </div>
@@ -340,13 +340,11 @@ export default function App() {
       {error && <div className="error">{error}</div>}
 
       {/* Collapsible - Full Label Info */}
-      <div
-        className="collapsible"
-        onClick={() =>
-          setExpanded((p) => ({ ...p, labels: !p.labels }))
-        }
-      >
-        <div className="collapsible-header">
+      <div className="collapsible">
+        <div
+          className="collapsible-header"
+          onClick={() => setExpanded((p) => ({ ...p, labels: !p.labels }))}
+        >
           <span>Detected Labels (Full Info)</span>
           <span className={`arrow ${expanded.labels ? "open" : ""}`}>▶</span>
         </div>
@@ -374,13 +372,11 @@ export default function App() {
       </div>
 
       {/* Collapsible - Image Properties */}
-      <div
-        className="collapsible"
-        onClick={() =>
-          setExpanded((p) => ({ ...p, props: !p.props }))
-        }
-      >
-        <div className="collapsible-header">
+      <div className="collapsible">
+        <div
+          className="collapsible-header"
+          onClick={() => setExpanded((p) => ({ ...p, labels: !p.labels }))}
+        >
           <span>Image Properties</span>
           <span className={`arrow ${expanded.props ? "open" : ""}`}>▶</span>
         </div>

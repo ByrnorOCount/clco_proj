@@ -20,6 +20,8 @@ function fetchImageBytesFromUrl(url) {
 }
 
 exports.handler = async (event) => {
+  console.log("Incoming event:", JSON.stringify(event, null, 2));
+
   try {
     const body =
       typeof event.body === "string" ? JSON.parse(event.body) : event.body || {};
@@ -33,49 +35,37 @@ exports.handler = async (event) => {
     } else if (body.imageUrl) {
       imageBytes = await fetchImageBytesFromUrl(body.imageUrl);
     } else {
+      console.warn("No image input provided");
       return {
         statusCode: 400,
         body: JSON.stringify({ error: "Provide imageUrl or imageBase64" }),
       };
     }
 
-    // Use provided params or sensible defaults
-    const minConfidence = typeof body.minConfidence === "number" ? body.minConfidence : 55; // doc default
-    const maxLabels = typeof body.maxLabels === "number" ? body.maxLabels : 100;
-    const maxDominantColors =
-      typeof body.maxDominantColors === "number" ? body.maxDominantColors : 5;
-
-    // Build DetectLabels request with both GENERAL_LABELS and IMAGE_PROPERTIES when needed
     const params = {
       Image: { Bytes: imageBytes },
-      // MinConfidence and MaxLabels only apply to GENERAL_LABELS,
-      // but sending them here is fine as the API applies them to label detection.
-      MinConfidence: minConfidence,
-      MaxLabels: maxLabels,
+      MinConfidence: typeof body.minConfidence === "number" ? body.minConfidence : 55,
+      MaxLabels: typeof body.maxLabels === "number" ? body.maxLabels : 100,
       Features: ["GENERAL_LABELS", "IMAGE_PROPERTIES"],
-      Settings: {
-        ImageProperties: {
-          MaxDominantColors: maxDominantColors,
-        },
-      },
+      Settings: { ImageProperties: { MaxDominantColors: body.maxDominantColors ?? 5 } },
     };
 
-    const cmd = new DetectLabelsCommand(params);
-    const rekogResponse = await rekognition.send(cmd);
+    console.log("Rekognition request params:", JSON.stringify(params, null, 2));
 
-    // rekogResponse contains: Labels (array), ImageProperties (object), LabelModelVersion, OrientationCorrection
+    const rekogResponse = await rekognition.send(new DetectLabelsCommand(params));
+
+    console.log("Rekognition response:", JSON.stringify(rekogResponse, null, 2));
+
     return {
       statusCode: 200,
       headers: { "Access-Control-Allow-Origin": "*" },
       body: JSON.stringify({
         Labels: rekogResponse.Labels || [],
         ImageProperties: rekogResponse.ImageProperties || null,
-        LabelModelVersion: rekogResponse.LabelModelVersion || null,
-        OrientationCorrection: rekogResponse.OrientationCorrection || null,
       }),
     };
   } catch (err) {
-    console.error(err);
+    console.error("Error during Rekognition call:", err);
     return {
       statusCode: 500,
       headers: { "Access-Control-Allow-Origin": "*" },
