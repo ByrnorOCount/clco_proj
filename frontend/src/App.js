@@ -23,6 +23,7 @@ export default function App() {
   const [maxLabels, setMaxLabels] = useState(100);
   const [maxDominantColors, setMaxDominantColors] = useState(5);
   const [expanded, setExpanded] = useState({ labels: false, props: false });
+  const [tooltip, setTooltip] = useState(null);
 
   async function handleFileChange(e) {
     const f = e.target.files[0];
@@ -71,6 +72,23 @@ export default function App() {
     });
   }
 
+  // Utility to add a small delay
+  const wait = (ms) => new Promise(res => setTimeout(res, ms));
+
+  // Simulates smooth progress for non-upload stages
+  const simulateProgress = async (start, end, duration, onProgress) => {
+    const stepTime = 16; // ~60fps
+    const steps = Math.max(1, Math.floor(duration / stepTime));
+    const increment = (end - start) / steps;
+    let currentProgress = start;
+
+    for (let i = 0; i < steps; i++) {
+      currentProgress += increment;
+      onProgress(Math.min(currentProgress, end));
+      await wait(stepTime);
+    }
+  };
+
   async function handleAnalyze(e) {
     e && e.preventDefault();
     resetStateForNewRun();
@@ -83,16 +101,13 @@ export default function App() {
     setLoading(true);
     setProgressPct(5);
 
-    // Utility to add a small delay
-    const wait = (ms) => new Promise(res => setTimeout(res, ms));
-
     try {
       let body;
       let uploadStartPct = 5;
       if (file || preview) {
-        await wait(100); setProgressPct(10);
+        await simulateProgress(5, 10, 100, setProgressPct);
         const b64 = preview || await toDataUrl(file);
-        await wait(100); setProgressPct(20);
+        await simulateProgress(10, 20, 100, setProgressPct);
         body = { 
           imageBase64: b64, 
           minConfidence, 
@@ -114,15 +129,16 @@ export default function App() {
         API_ENDPOINT, 
         JSON.stringify(body), 
         { setProgress: setProgressPct, progressStart: uploadStartPct, progressEnd: 80 }
-      ); // todo: increment progress smoothly
+      );
 
-      await wait(200); setProgressPct(85); 
+      await simulateProgress(80, 95, 500, setProgressPct); // "Analyzing..."
+
       const gotLabels = json.Labels || [];
       const gotProps = json.ImageProperties || null;
 
       setLabels(Array.isArray(gotLabels) ? gotLabels : []);
       setImageProps(gotProps);
-      await wait(200); setProgressPct(100);
+      await simulateProgress(95, 100, 200, setProgressPct); // "Finalizing..."
     } catch (err) {
       console.error(err);
       setError(err.message || "Analysis failed");
@@ -140,6 +156,53 @@ export default function App() {
       reader.onerror = rej;
       reader.readAsDataURL(file);
     });
+  }
+
+  function renderImageProperties(props) {
+    if (!props) return null;
+    return (
+      <div className="properties-container">
+        {props.DominantColors && (
+          <>
+            <h3>Dominant Colors</h3>
+            <div className="colors-grid">
+              {props.DominantColors.map((color, i) => (
+                <div key={i} className="color-card">
+                  <div
+                    className="color-swatch"
+                    style={{ backgroundColor: color.CSSColor }}
+                  />
+                  <div className="color-info">
+                    <b>{color.CSSColor}</b>
+                    <span>{color.HexCode}</span>
+                    <span>{color.PixelPercent.toFixed(2)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        {props.Quality && (
+          <>
+            <h3>Image Quality</h3>
+            <div className="quality-grid">
+              <div className="quality-item">
+                <span>Brightness</span>
+                <span>{props.Quality.Brightness.toFixed(1)}</span>
+              </div>
+              <div className="quality-item">
+                <span>Sharpness</span>
+                <span>{props.Quality.Sharpness.toFixed(1)}</span>
+              </div>
+              <div className="quality-item">
+                <span>Contrast</span>
+                <span>{props.Quality.Contrast.toFixed(1)}</span>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -220,8 +283,7 @@ export default function App() {
                 l.Instances.map((inst, j) => (
                   <div
                     key={`${i}-${j}`}
-                    className="bbox"
-                    title={`${l.Name} (${l.Confidence.toFixed(1)}%)`}
+                    className="bbox"                    
                     style={{
                       left: `${inst.BoundingBox.Left * 100}%`,
                       top: `${inst.BoundingBox.Top * 100}%`,
@@ -229,9 +291,24 @@ export default function App() {
                       height: `${inst.BoundingBox.Height * 100}%`,
                       borderColor: percentToColor(l.Confidence),
                     }}
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setTooltip({
+                        x: rect.left + window.scrollX,
+                        y: rect.top + window.scrollY,
+                        label: l,
+                      });
+                    }}
+                    onMouseLeave={() => setTooltip(null)}
                   />
                 ))
               )}
+            {tooltip && (
+              <div className="bbox-tooltip" style={{ top: tooltip.y, left: tooltip.x }}>
+                <b>{tooltip.label.Name}</b> ({tooltip.label.Confidence.toFixed(1)}%)<br/>
+                <i>{tooltip.label.Categories?.map(c => c.Name).join(', ')}</i>
+              </div>
+            )}
           </div>
         ) : (
           <div className="preview-placeholder">Image preview</div>
@@ -251,8 +328,8 @@ export default function App() {
             {progressPct < 10 && "Initializing…"}
             {progressPct >= 10 && progressPct < 25 && "Preparing image…"}
             {progressPct >= 25 && progressPct < 80 && "Uploading to API…"}
-            {progressPct >= 80 && progressPct < 90 && "Analyzing with AWS Rekognition…"}
-            {progressPct >= 85 && progressPct < 100 && "Finalizing results…"}
+            {progressPct >= 80 && progressPct < 95 && "Analyzing with AWS Rekognition…"}
+            {progressPct >= 95 && progressPct < 100 && "Finalizing results…"}
             <span> ({Math.round(progressPct)}%)</span>
           </div>
         ) : (
@@ -308,9 +385,7 @@ export default function App() {
           <span className={`arrow ${expanded.props ? "open" : ""}`}>▶</span>
         </div>
         {expanded.props && imageProps && (
-          <pre className="json-view">
-            {JSON.stringify(imageProps, null, 2)}
-          </pre>
+          <div className="collapsible-content">{renderImageProperties(imageProps)}</div>
         )}
       </div>
 
@@ -329,6 +404,9 @@ export default function App() {
               style={{ borderTop: `6px solid ${bg}` }}
             >
               <div className="label-name">{l.Name}</div>
+              {l.Categories && l.Categories.length > 0 && (
+                <div className="label-category">{l.Categories.map(c => c.Name).join(', ')}</div>
+              )}
               <div className="label-confidence">{pct}%</div>
               <div className="confidence-bar-outer">
                 <div
