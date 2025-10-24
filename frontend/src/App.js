@@ -379,7 +379,7 @@ export default function App() {
       <div className="collapsible">
         <div
           className="collapsible-header"
-          onClick={() => setExpanded((p) => ({ ...p, labels: !p.labels }))}
+          onClick={() => setExpanded((p) => ({ ...p, props: !p.props }))}
         >
           <span>Image Properties</span>
           <span className={`arrow ${expanded.props ? "open" : ""}`}>▶</span>
